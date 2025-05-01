@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, Text, TouchableOpacity, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Image, StyleSheet, Text, TouchableOpacity, Alert, ActivityIndicator, Dimensions, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Config from '../Config/config';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import { Linking } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -14,7 +15,6 @@ const LocationScreen = ({ navigation, route }) => {
     const [loading, setLoading] = useState(false);
     const [location, setLocation] = useState(null);
     const [address, setAddress] = useState('');
-    const [errorMsg, setErrorMsg] = useState(null);
     const baseUrl = Config.baseUrl;
 
     useEffect(() => {
@@ -23,43 +23,62 @@ const LocationScreen = ({ navigation, route }) => {
                 const savedAddress = await AsyncStorage.getItem('userLocation');
                 if (savedAddress) {
                     setAddress(savedAddress);
-                    console.log('Loaded saved address:', savedAddress);
                 }
             } catch (error) {
                 console.error('Error loading saved address:', error);
             }
         };
-
         loadSavedAddress();
+        getCurrentLocation();
     }, []);
+
+    const requestPermissions = async () => {
+        const foreground = await Location.requestForegroundPermissionsAsync();
+        if (foreground.status !== 'granted') {
+            if (!foreground.canAskAgain) {
+                Alert.alert(
+                    'Location Permission',
+                    'Please enable location permission from settings.',
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Open Settings', onPress: () => Linking.openSettings() },
+                    ]
+                );
+            } else {
+                Alert.alert('Permission Denied', 'Please allow location access.');
+            }
+            return false;
+        }
+
+        if (Platform.OS === 'android' && Platform.Version >= 29) {
+            const background = await Location.requestBackgroundPermissionsAsync();
+            if (background.status !== 'granted') {
+                Alert.alert('Background Permission Required', 'Enable background location for better accuracy.');
+            }
+        }
+
+        return true;
+    };
 
     const getCurrentLocation = async () => {
         setLoading(true);
+        const hasPermission = await requestPermissions();
+        if (!hasPermission) {
+            setLoading(false);
+            return;
+        }
+
+        const isLocationEnabled = await Location.hasServicesEnabledAsync();
+        if (!isLocationEnabled) {
+            Alert.alert('Location Disabled', 'Please enable device location services.');
+            setLoading(false);
+            return;
+        }
+
         try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') {
-                setErrorMsg('Permission to access location was denied');
-                Alert.alert('Permission Denied', 'Please allow location access.');
-                setLoading(false);
-                return;
-            }
-
-            const isLocationEnabled = await Location.hasServicesEnabledAsync();
-            if (!isLocationEnabled) {
-                Alert.alert("Location Disabled", "Please enable location services.");
-                setLoading(false);
-                return;
-            }
-
-            // Wait 1 second to avoid crash on some devices
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const currentLocation = await Location.getCurrentPositionAsync({});
-            if (!currentLocation?.coords) {
-                Alert.alert("Error", "Location data is unavailable.");
-                setLoading(false);
-                return;
-            }
+            const currentLocation = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+            });
 
             const { latitude, longitude } = currentLocation.coords;
             setLocation({
@@ -73,26 +92,18 @@ const LocationScreen = ({ navigation, route }) => {
             const res = await axios.get(
                 `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`
             );
-
             const fullAddress = res.data.results?.[0]?.formatted;
             if (fullAddress) {
                 setAddress(fullAddress);
                 await AsyncStorage.setItem('userLocation', fullAddress);
-                console.log('Location saved to AsyncStorage');
-            } else {
-                Alert.alert('Error', 'Unable to fetch address.');
             }
-        } catch (err) {
-            console.error('Failed to fetch address:', err);
+        } catch (error) {
+            console.error('Error fetching location:', error);
             Alert.alert('Error', 'Failed to fetch location.');
         } finally {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        getCurrentLocation();
-    }, []);
 
     const AddPeople = () => {
         navigation.navigate('track');
@@ -118,11 +129,7 @@ const LocationScreen = ({ navigation, route }) => {
             )}
 
             <View style={styles.profileContainer}>
-                <Image
-                    source={{ uri: imageUrl }}
-                    style={styles.profileImage}
-                    alt='Logo'
-                />
+                <Image source={{ uri: imageUrl }} style={styles.profileImage} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.profileText}>Add at least one trusted contact</Text>
                 </View>
@@ -132,10 +139,8 @@ const LocationScreen = ({ navigation, route }) => {
             </View>
 
             <TouchableOpacity style={styles.trackButton}>
-                <>
-                    <Icon name="location-on" size={30} color="#fff" style={styles.iconStyle} />
-                    <Text style={styles.trackButtonText}>Track Me</Text>
-                </>
+                <Icon name="location-on" size={30} color="#fff" style={styles.iconStyle} />
+                <Text style={styles.trackButtonText}>Track Me</Text>
             </TouchableOpacity>
         </View>
     );
@@ -144,6 +149,10 @@ const LocationScreen = ({ navigation, route }) => {
 export default LocationScreen;
 
 const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        position: 'relative',
+    },
     loaderContainer: {
         flex: 1,
         justifyContent: 'center',
@@ -162,10 +171,6 @@ const styles = StyleSheet.create({
         marginTop: 50,
         fontSize: 16,
         color: 'red',
-    },
-    container: {
-        flex: 1,
-        position: 'relative',
     },
     map: {
         width: width,
