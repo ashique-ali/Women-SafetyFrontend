@@ -16,14 +16,24 @@
       "supportsTablet": true
     },
     "android": {
-      "permissions": ["SEND_SMS", "READ_SMS", "RECEIVE_SMS"],
+      "permissions": [
+        "SEND_SMS",
+        "READ_SMS",
+        "RECEIVE_SMS"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "package": "com.ashique1s.WomenSafety"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7e1fd79a-be7b-4ef1-97c8-fb40b343fcfe"
+      }
     }
   }
 }

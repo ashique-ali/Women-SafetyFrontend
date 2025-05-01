@@ -36,52 +36,67 @@ const LocationScreen = ({ navigation, route }) => {
     const getCurrentLocation = async () => {
         setLoading(true);
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
+            const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
                 setErrorMsg('Permission to access location was denied');
                 Alert.alert('Permission Denied', 'Please allow location access.');
                 setLoading(false);
                 return;
             }
-            let location = await Location.getCurrentPositionAsync({});
+
+            const isLocationEnabled = await Location.hasServicesEnabledAsync();
+            if (!isLocationEnabled) {
+                Alert.alert("Location Disabled", "Please enable location services.");
+                setLoading(false);
+                return;
+            }
+
+            // Wait 1 second to avoid crash on some devices
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const currentLocation = await Location.getCurrentPositionAsync({});
+            if (!currentLocation?.coords) {
+                Alert.alert("Error", "Location data is unavailable.");
+                setLoading(false);
+                return;
+            }
+
+            const { latitude, longitude } = currentLocation.coords;
             setLocation({
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
+                latitude,
+                longitude,
                 latitudeDelta: 0.01,
                 longitudeDelta: 0.01,
             });
-            const { latitude, longitude } = location.coords;
+
             const apiKey = "ad1f4ec929bb41daada78d52119d4e40";
             const res = await axios.get(
                 `https://api.opencagedata.com/geocode/v1/json?q=${latitude}+${longitude}&key=${apiKey}`
             );
-            const fullAddress = res.data.results[0]?.formatted;
+
+            const fullAddress = res.data.results?.[0]?.formatted;
             if (fullAddress) {
                 setAddress(fullAddress);
-                try {
-                    await AsyncStorage.setItem('userLocation', fullAddress);
-                    console.log('Location saved to AsyncStorage');
-                } catch (storageError) {
-                    console.error('Failed to save location:', storageError);
-                }
+                await AsyncStorage.setItem('userLocation', fullAddress);
+                console.log('Location saved to AsyncStorage');
             } else {
                 Alert.alert('Error', 'Unable to fetch address.');
             }
         } catch (err) {
             console.error('Failed to fetch address:', err);
-            Alert.alert('Error', 'Failed to fetch address.');
+            Alert.alert('Error', 'Failed to fetch location.');
         } finally {
             setLoading(false);
         }
-    };    
+    };
 
     useEffect(() => {
         getCurrentLocation();
-    }, [])
+    }, []);
 
     const AddPeople = () => {
         navigation.navigate('track');
-    }
+    };
 
     return (
         <View style={styles.container}>
@@ -105,7 +120,8 @@ const LocationScreen = ({ navigation, route }) => {
             <View style={styles.profileContainer}>
                 <Image
                     source={{ uri: imageUrl }}
-                    style={styles.profileImage} alt='Logo'
+                    style={styles.profileImage}
+                    alt='Logo'
                 />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                     <Text style={styles.profileText}>Add at least one trusted contact</Text>
@@ -134,32 +150,18 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         backgroundColor: '#fff',
     },
-
     loadingText: {
         marginTop: 10,
         fontSize: 16,
         color: '#9C27B0',
         fontWeight: 'bold',
     },
-
     errorText: {
         flex: 1,
         textAlign: 'center',
         marginTop: 50,
         fontSize: 16,
         color: 'red',
-    },
-    logoText: {
-        fontSize: 20,
-        color: '#C71585',
-        fontWeight: 'bold',
-    },
-    betaText: {
-        fontSize: 14,
-        fontWeight: 'normal',
-    },
-    map: {
-        ...StyleSheet.absoluteFillObject,
     },
     container: {
         flex: 1,
@@ -190,7 +192,7 @@ const styles = StyleSheet.create({
         height: 50,
         borderRadius: 25,
         borderWidth: 2,
-        borderColor: '#ddd'
+        borderColor: '#ddd',
     },
     profileText: {
         fontSize: 14,
@@ -234,6 +236,6 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: 'bold',
-        marginTop: 5
+        marginTop: 5,
     },
 });
