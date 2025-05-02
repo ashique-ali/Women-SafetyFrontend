@@ -33,6 +33,12 @@ const LocationScreen = ({ navigation, route }) => {
     }, []);
 
     const requestPermissions = async () => {
+        const servicesEnabled = await Location.hasServicesEnabledAsync();
+        if (!servicesEnabled) {
+            Alert.alert('Location Services Off', 'Please enable location services.');
+            return false;
+        }
+
         const foreground = await Location.requestForegroundPermissionsAsync();
         if (foreground.status !== 'granted') {
             if (!foreground.canAskAgain) {
@@ -56,7 +62,6 @@ const LocationScreen = ({ navigation, route }) => {
                 Alert.alert('Background Permission Required', 'Enable background location for better accuracy.');
             }
         }
-
         return true;
     };
 
