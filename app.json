@@ -13,7 +13,12 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to track and share your position for safety.",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location even when the app is in the background.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We use your location to ensure you are safe at all times."
+      }
     },
     "android": {
       "permissions": [
